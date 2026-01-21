@@ -44,7 +44,7 @@ func loadTasks() (*TodoList, error) {
 	return &tl, nil
 }
 
-func saveTask(tl *TodoList) error {
+func saveTasks(tl *TodoList) error {
 	data, err := json.MarshalIndent(tl, "", "  ")
 	if err != nil {
 		return err
@@ -145,11 +145,13 @@ func toggleTask(tl *TodoList, strId string) {
 	}
 
 	tl.Tasks[index].Done = !tl.Tasks[index].Done
-	tl.Tasks[index].CompletedAt = ""
-	status := "не выполнено"
+	var status string
 	if tl.Tasks[index].Done {
 		status = "выполнено"
 		tl.Tasks[index].CompletedAt = time.Now().Format("2006-01-02 15:04:05")
+	} else {
+		status = "не выполнено"
+		tl.Tasks[index].CompletedAt = ""
 	}
 
 	fmt.Printf("Задача #%d отмечена как %s\n", id, status)
@@ -213,7 +215,7 @@ func main() {
 	if *addFlag != "" {
 		content := *addFlag
 		addTask(tl, content)
-		if err := saveTask(tl); err != nil {
+		if err := saveTasks(tl); err != nil {
 			fmt.Printf("Ошибка сохранения задач: %v\n", err.Error())
 			return
 		}
@@ -223,7 +225,7 @@ func main() {
 	if *toggleFlag != "" {
 		id := *toggleFlag
 		toggleTask(tl, id)
-		if err := saveTask(tl); err != nil {
+		if err := saveTasks(tl); err != nil {
 			fmt.Printf("Ошибка сохранения задач: %v\n", err.Error())
 			return
 		}
@@ -233,7 +235,7 @@ func main() {
 	if *deleteFlag != "" {
 		id := *deleteFlag
 		deleteTask(tl, id)
-		if err := saveTask(tl); err != nil {
+		if err := saveTasks(tl); err != nil {
 			fmt.Printf("Ошибка сохранения задач: %v\n", err)
 			return
 		}
@@ -242,7 +244,7 @@ func main() {
 
 	if *clearFlag {
 		clearAllTasks(tl)
-		if err := saveTask(tl); err != nil {
+		if err := saveTasks(tl); err != nil {
 			fmt.Printf("Ошибка сохранения задач: %v\n", err)
 			return
 		}
@@ -251,7 +253,7 @@ func main() {
 
 	if *completeAllFlag {
 		completeAllTasks(tl)
-		if err := saveTask(tl); err != nil {
+		if err := saveTasks(tl); err != nil {
 			fmt.Printf("Ошибка сохранения задач: %v\n", err)
 			return
 		}
