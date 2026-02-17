@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,255 +9,323 @@ import (
 	"time"
 )
 
+type taskStatus string
+
+const (
+	statusTodo       taskStatus = "todo"
+	statusInProgress taskStatus = "in-progress"
+	statusDone       taskStatus = "done"
+)
+
 type Task struct {
-	Id          int    `json:"id"`
-	Content     string `json:"content"`
-	Done        bool   `json:"done"`
-	CreatedAt   string `json:"created_at"`
-	CompletedAt string `json:"completed_at,omitempty"`
+	Id          int        `json:"id"`
+	Description string     `json:"description"`
+	Status      taskStatus `json:"status"`
+	CreatedAt   string     `json:"createdAt"`
+	UpdatedAt   string     `json:"updatedAt"`
 }
 
-type TodoList struct {
-	Tasks  []Task `json:"tasks"`
-	NextId int    `json:"next_id"`
-}
+const tasksFile = "tasks.json"
 
-const maxTaskLength = 200
-const tasksPath = "tasks.json"
+func loadTasks() ([]*Task, error) {
+	var tasks []*Task
 
-func loadTasks() (*TodoList, error) {
-	data, err := os.ReadFile(tasksPath)
+	data, err := os.ReadFile(tasksFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &TodoList{NextId: 1}, nil
+			return nil, nil
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("ошибка загрузки задач: %v", err)
 	}
 
-	var tl TodoList
-	if err := json.Unmarshal(data, &tl); err != nil {
-		return nil, err
-	}
-
-	return &tl, nil
-}
-
-func saveTasks(tl *TodoList) error {
-	data, err := json.MarshalIndent(tl, "", "  ")
+	err = json.Unmarshal(data, &tasks)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("ошибка парсинга файла задач: %v", err)
 	}
 
-	return os.WriteFile(tasksPath, data, 0644)
+	return tasks, nil
 }
 
-func parseTaskId(strId string) (int, bool) {
-	id, err := strconv.Atoi(strId)
+func saveTasks(tasks []*Task) error {
+	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
-		fmt.Println("Ошибка: не верный id")
-		return 0, false
+		return fmt.Errorf("ошибка сериализации задач: %v", err)
 	}
 
-	return id, true
-}
-
-func findTaskIndex(tl *TodoList, id int) int {
-	for i := range tl.Tasks {
-		if tl.Tasks[i].Id == id {
-			return i
-		}
-	}
-
-	return -1
-}
-
-func validateTask(tl *TodoList, task Task) error {
-	if len(task.Content) > maxTaskLength {
-		return fmt.Errorf("Ошибка: текст задачи не должен превышать %d символов\n", maxTaskLength)
-	}
-
-	if strings.TrimSpace(task.Content) == "" {
-		return fmt.Errorf("Ошибка: новый текст задачи не может быть пустым")
-	}
-
-	for _, t := range tl.Tasks {
-		if strings.EqualFold(t.Content, task.Content) {
-			return fmt.Errorf("Ошибка: задача с таким заголовком уже существует")
-		}
+	err = os.WriteFile(tasksFile, data, 0644)
+	if err != nil {
+		return fmt.Errorf("ошибка записи файла задач: %v", err)
 	}
 
 	return nil
 }
 
-func listTasks(tl *TodoList) {
-	if len(tl.Tasks) == 0 {
-		fmt.Println("Список задач пуст")
-		return
-	}
-
-	fmt.Println("Список задач:")
-	for _, task := range tl.Tasks {
-		status := " "
-		if task.Done {
-			status = "x"
-		}
-
-		fmt.Printf("%d [%s], %s (создана: %s)", task.Id, status, task.Content, task.CreatedAt)
-		if task.Done && task.CompletedAt != "" {
-			fmt.Printf(", выполнена: %s", task.CompletedAt)
-		}
-
-		fmt.Println()
-	}
-}
-
-func addTask(tl *TodoList, content string) {
-	task := Task{
-		Id:        tl.NextId,
-		Content:   content,
-		Done:      false,
-		CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
-	}
-
-	err := validateTask(tl, task)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
-	tl.Tasks = append(tl.Tasks, task)
-	tl.NextId++
-	fmt.Printf("Добавлена задача %d: %s\n", task.Id, content)
-}
-
-func toggleTask(tl *TodoList, strId string) {
-	id, ok := parseTaskId(strId)
-	if !ok {
-		return
-	}
-
-	index := findTaskIndex(tl, id)
-	if index == -1 {
-		fmt.Println("Задача не найдена")
-		return
-	}
-
-	tl.Tasks[index].Done = !tl.Tasks[index].Done
-	var status string
-	if tl.Tasks[index].Done {
-		status = "выполнено"
-		tl.Tasks[index].CompletedAt = time.Now().Format("2006-01-02 15:04:05")
-	} else {
-		status = "не выполнено"
-		tl.Tasks[index].CompletedAt = ""
-	}
-
-	fmt.Printf("Задача #%d отмечена как %s\n", id, status)
-}
-
-func deleteTask(tl *TodoList, strId string) {
-	id, ok := parseTaskId(strId)
-	if !ok {
-		return
-	}
-
-	index := findTaskIndex(tl, id)
-	if index == -1 {
-		fmt.Println("Задача не найдена")
-		return
-	}
-
-	tl.Tasks = append(tl.Tasks[:index], tl.Tasks[index+1:]...)
-	fmt.Printf("Задача #%d была удалена\n", id)
-}
-
-func clearAllTasks(tl *TodoList) {
-	tl.Tasks = []Task{}
-	tl.NextId = 1
-	fmt.Println("Все задачи очищены")
-}
-
-func completeAllTasks(tl *TodoList) {
-	currentTime := time.Now().Format("2006-01-02 15:04:05")
-	for i := range tl.Tasks {
-		if !tl.Tasks[i].Done {
-			tl.Tasks[i].Done = true
-			tl.Tasks[i].CompletedAt = currentTime
+func taskById(tasks []*Task, id int) (*Task, error) {
+	for _, task := range tasks {
+		if task.Id == id {
+			return task, nil
 		}
 	}
 
-	fmt.Println("Все задачи отмечены как выполненные")
+	return nil, fmt.Errorf("Задача не найдена (ID: %d)", id)
 }
 
-func main() {
-	listFlag := flag.Bool("list", false, "List all tasks")
-	addFlag := flag.String("add", "", "Add a new task")
-	toggleFlag := flag.String("toggle", "", "Toggle task status (provide task ID)")
-	deleteFlag := flag.String("delete", "", "Delete a task (provide task ID)")
-	clearFlag := flag.Bool("clear", false, "Clear all tasks")
-	completeAllFlag := flag.Bool("complete-all", false, "Mark all tasks as complete")
+func nextId(tasks []*Task) int {
+	id := 0
 
-	flag.Parse()
+	for _, task := range tasks {
+		if task.Id > id {
+			id = task.Id
+		}
+	}
 
-	tl, err := loadTasks()
+	id++
+	return id
+}
+
+func addTask(desc string) {
+	tasks, err := loadTasks()
 	if err != nil {
 		fmt.Printf("Ошибка загрузки задач: %v\n", err)
 		return
 	}
 
-	if *listFlag {
-		listTasks(tl)
+	now := time.Now().Format(time.RFC3339)
+	newTask := Task{
+		Id:          nextId(tasks),
+		Description: desc,
+		Status:      statusTodo,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	tasks = append(tasks, &newTask)
+
+	err = saveTasks(tasks)
+	if err != nil {
+		fmt.Printf("Ошибка записи файла задач: %v\n", err)
 		return
 	}
 
-	if *addFlag != "" {
-		content := *addFlag
-		addTask(tl, content)
-		if err := saveTasks(tl); err != nil {
-			fmt.Printf("Ошибка сохранения задач: %v\n", err.Error())
-			return
+	fmt.Printf("Задача добавлена успешно (ID: %d)\n", newTask.Id)
+}
+
+func updateTask(id int, desc string) {
+	tasks, err := loadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		return
+	}
+
+	task, err := taskById(tasks, id)
+	if err != nil {
+		fmt.Printf("Задача с ID %d не найдена\n", id)
+		return
+	}
+
+	now := time.Now().Format(time.RFC3339)
+	task.Description = desc
+	task.UpdatedAt = now
+	tasks[id-1] = task
+
+	err = saveTasks(tasks)
+	if err != nil {
+		fmt.Printf("Ошибка записи файла задач: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Задача %d обновлена успешно\n", id)
+}
+
+func deleteTask(id int) {
+	tasks, err := loadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		return
+	}
+
+	_, err = taskById(tasks, id)
+	if err != nil {
+		fmt.Printf("Задача с ID %d не найдена\n", id)
+		return
+	}
+
+	tasks = append(tasks[:id-1], tasks[id:]...)
+
+	err = saveTasks(tasks)
+	if err != nil {
+		fmt.Printf("Ошибка записи файла задач: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Задача %d удалена успешно\n", id)
+}
+
+func markTask(id int, status taskStatus) {
+	tasks, err := loadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		return
+	}
+
+	task, err := taskById(tasks, id)
+	if err != nil {
+		fmt.Printf("Задача с ID %d не найдена\n", id)
+		return
+	}
+
+	now := time.Now().Format(time.RFC3339)
+	task.Status = status
+	task.UpdatedAt = now
+	tasks[id-1] = task
+
+	err = saveTasks(tasks)
+	if err != nil {
+		fmt.Printf("Ошибка записи файла задач: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Задача %d помечена как %s\n", id, status)
+}
+
+func listTasks(statusFilter string) {
+	tasks, err := loadTasks()
+	if err != nil {
+		fmt.Printf("Ошибка загрузки задач: %v\n", err)
+		return
+	}
+
+	var filteredTasks []*Task
+	if statusFilter == "" {
+		filteredTasks = tasks
+	} else {
+		status := taskStatus(statusFilter)
+		for _, task := range tasks {
+			if task.Status == status {
+				filteredTasks = append(filteredTasks, task)
+			}
+		}
+	}
+
+	if len(filteredTasks) == 0 {
+		if statusFilter == "" {
+			fmt.Println("Нет задач")
+		} else {
+			fmt.Printf("Нет задач с статусом '%s'\n", statusFilter)
 		}
 		return
 	}
 
-	if *toggleFlag != "" {
-		id := *toggleFlag
-		toggleTask(tl, id)
-		if err := saveTasks(tl); err != nil {
-			fmt.Printf("Ошибка сохранения задач: %v\n", err.Error())
-			return
-		}
+	fmt.Println("Задачи:")
+	for _, task := range filteredTasks {
+		fmt.Printf("ID: %d\n", task.Id)
+		fmt.Printf("Description: %s\n", task.Description)
+		fmt.Printf("Status: %s\n", task.Status)
+		fmt.Printf("Created: %s\n", task.CreatedAt)
+		fmt.Printf("Updated: %s\n", task.UpdatedAt)
+		fmt.Println("---")
+	}
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Использование: task-cli <команда> [аргументы...]")
+		fmt.Println("Команды:")
+		fmt.Println("  add <описание> - Добавить новую задачу")
+		fmt.Println("  update <id> <описание> - Обновить задачу")
+		fmt.Println("  delete <id> - Удалить задачу")
+		fmt.Println("  mark-in-progress <id> - Отметить задачу как в процессе")
+		fmt.Println("  mark-done <id> - Отметить задачу как выполненной")
+		fmt.Println("  list [статус] - Список всех задач или задач по статусу (todo, in-progress, done)")
 		return
 	}
 
-	if *deleteFlag != "" {
-		id := *deleteFlag
-		deleteTask(tl, id)
-		if err := saveTasks(tl); err != nil {
-			fmt.Printf("Ошибка сохранения задач: %v\n", err)
+	command := os.Args[1]
+	args := os.Args[2:]
+
+	switch command {
+	case "add":
+		if len(args) < 1 {
+			fmt.Println("Использование: task-cli add <описание>")
 			return
 		}
-		return
-	}
 
-	if *clearFlag {
-		clearAllTasks(tl)
-		if err := saveTasks(tl); err != nil {
-			fmt.Printf("Ошибка сохранения задач: %v\n", err)
+		addTask(strings.Join(args, " "))
+	case "update":
+		if len(args) < 2 {
+			fmt.Println("Использование: task-cli update <id> <описание>")
 			return
 		}
-		return
-	}
 
-	if *completeAllFlag {
-		completeAllTasks(tl)
-		if err := saveTasks(tl); err != nil {
-			fmt.Printf("Ошибка сохранения задач: %v\n", err)
+		id, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Неверный идентификатор задачи: %v\n", err)
 			return
 		}
+
+		updateTask(id, strings.Join(args[1:], " "))
+	case "delete":
+		if len(args) != 1 {
+			fmt.Println("Использование: task-cli delete <id>")
+			return
+		}
+
+		id, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Неверный идентификатор задачи: %v\n", err)
+			return
+		}
+
+		deleteTask(id)
+	case "mark-todo":
+		if len(args) != 1 {
+			fmt.Println("Использование: task-cli mark-todo <id>")
+			return
+		}
+
+		id, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Неверный идентификатор задачи: %v\n", err)
+			return
+		}
+
+		markTask(id, "todo")
+	case "mark-in-progress":
+		if len(args) != 1 {
+			fmt.Println("Использование: task-cli mark-in-progress <id>")
+			return
+		}
+
+		id, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Неверный идентификатор задачи: %v\n", err)
+			return
+		}
+
+		markTask(id, "in-progress")
+	case "mark-done":
+		if len(args) != 1 {
+			fmt.Println("Использование: task-cli mark-done <id>")
+			return
+		}
+
+		id, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Неверный идентификатор задачи: %v\n", err)
+			return
+		}
+
+		markTask(id, "done")
+	case "list":
+		status := ""
+		if len(args) != 0 {
+			status = args[0]
+		}
+
+		listTasks(status)
+	default:
+		fmt.Printf("Неверная команда: %s\n", command)
 		return
 	}
-
-	flag.Usage()
 }
