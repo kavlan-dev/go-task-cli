@@ -15,7 +15,7 @@ func NewTaskRepository(tasksFile string) *taskRepository {
 	return &taskRepository{tasksFile: tasksFile}
 }
 
-func (r taskRepository) LoadTasks() ([]model.Task, error) {
+func (r *taskRepository) LoadTasks() ([]model.Task, error) {
 	var tasks []model.Task
 
 	data, err := os.ReadFile(r.tasksFile)
@@ -35,7 +35,7 @@ func (r taskRepository) LoadTasks() ([]model.Task, error) {
 	return tasks, nil
 }
 
-func (r taskRepository) SaveTasks(tasks []model.Task) error {
+func (r *taskRepository) SaveTasks(tasks []model.Task) error {
 	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		return fmt.Errorf("ошибка сериализации задач: %v", err)

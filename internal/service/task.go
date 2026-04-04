@@ -19,10 +19,10 @@ func NewTaskService(repo taskRepository) *taskService {
 	return &taskService{repo: repo}
 }
 
-func (s taskService) AddTask(desc string) (int, error) {
+func (s *taskService) AddTask(desc string) (*model.Task, error) {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
-		return 0, fmt.Errorf("ошибка загрузки задач: %w", err)
+		return nil, fmt.Errorf("ошибка загрузки задач: %w", err)
 	}
 
 	now := time.Now().Format(time.RFC3339)
@@ -37,13 +37,13 @@ func (s taskService) AddTask(desc string) (int, error) {
 	tasks = append(tasks, newTask)
 
 	if err := s.repo.SaveTasks(tasks); err != nil {
-		return 0, fmt.Errorf("ошибка записи файла задач: %w", err)
+		return nil, fmt.Errorf("ошибка записи файла задач: %w", err)
 	}
 
-	return newTask.Id, nil
+	return &newTask, nil
 }
 
-func (s taskService) UpdateTask(id int, desc string) error {
+func (s *taskService) UpdateTask(id int, desc string) error {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки задач: %w", err)
@@ -68,7 +68,7 @@ func (s taskService) UpdateTask(id int, desc string) error {
 	return nil
 }
 
-func (s taskService) DeleteTask(id int) error {
+func (s *taskService) DeleteTask(id int) error {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки задач: %w", err)
@@ -89,7 +89,7 @@ func (s taskService) DeleteTask(id int) error {
 	return nil
 }
 
-func (s taskService) MarkTask(id int, status model.TaskStatus) error {
+func (s *taskService) MarkTask(id int, status model.TaskStatus) error {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
 		return fmt.Errorf("ошибка загрузки задач: %w", err)
@@ -114,7 +114,7 @@ func (s taskService) MarkTask(id int, status model.TaskStatus) error {
 	return nil
 }
 
-func (s taskService) ListTasks(statusFilter model.TaskStatus) ([]model.Task, error) {
+func (s *taskService) ListTasks(statusFilter model.TaskStatus) ([]model.Task, error) {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
 		return nil, fmt.Errorf("ошибка загрузки задач: %w", err)
@@ -134,7 +134,7 @@ func (s taskService) ListTasks(statusFilter model.TaskStatus) ([]model.Task, err
 	return filteredTasks, nil
 }
 
-func (s taskService) taskIndexById(id int) (int, error) {
+func (s *taskService) taskIndexById(id int) (int, error) {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
 		return 0, err
@@ -149,7 +149,7 @@ func (s taskService) taskIndexById(id int) (int, error) {
 	return 0, fmt.Errorf("Задача не найдена (ID: %d)", id)
 }
 
-func (s taskService) nextId() int {
+func (s *taskService) nextId() int {
 	tasks, err := s.repo.LoadTasks()
 	if err != nil {
 		return 1

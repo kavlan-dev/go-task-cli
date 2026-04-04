@@ -9,7 +9,7 @@ import (
 )
 
 type TaskService interface {
-	AddTask(description string) (int, error)
+	AddTask(description string) (*model.Task, error)
 	UpdateTask(id int, description string) error
 	DeleteTask(id int) error
 	MarkTask(id int, status model.TaskStatus) error
@@ -39,12 +39,12 @@ func Run(serv TaskService) {
 			return
 		}
 
-		id, err := serv.AddTask(strings.Join(args, " "))
+		task, err := serv.AddTask(strings.Join(args, " "))
 		if err != nil {
 			fmt.Printf("Ошибка: %v\n", err)
 			return
 		}
-		fmt.Printf("Задача добавлена успешно (ID: %d)\n", id)
+		fmt.Printf("Задача добавлена успешно (ID: %d)\n", task.Id)
 	case "update":
 		if len(args) < 2 {
 			fmt.Println("Использование: task-cli update <id> <описание>")
